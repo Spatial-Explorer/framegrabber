@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+
+# framegrabber - Extract first and last frames from a video
+# GitHub: https://github.com/Spatial-Explorer/framegrabber
+
+show_help() {
+    echo "Usage: framegrabber -v <video-file>"
+    echo "Extracts first and last frames from a video as PNG files"
+    echo ""
+    echo "Options:"
+    echo "  -v, --video    Video file to process (required)"
+    echo "  -h, --help     Show this help message"
+    echo ""
+    echo "Example: framegrabber -v myvideo.mp4"
+}
+
+# Function to check if file exists and prompt for overwrite
+check_overwrite() {
+    local file="$1"
+    local file_type="$2"
+    
+    if [[ -f "$极ile" ]]; then
+        read -p "$file_type file '$file' already exists. Overwrite? (y/N): " answer
+        case "${answer:-N}" in
+            [Yy]*)
+                echo "Overwriting $file..."
+                return 0
+                ;;
+            *)
+                echo "Skipping $file_type extraction."
+                return 1
+                ;;
+        esac
+    fi
+    return 0
+}
+
+# Check if ffmpeg is available
+if ! command -v ffmpeg &> /dev/null; then
+    echo "Error: ffmpeg is not installed. Please install ffmpeg first."
+    exit 1
+fi
+
+if ! command -v ffprobe &> /dev/null; then
+    echo "Error: ffprobe is not installed. Please install ffmpeg (includes ffprobe)."
+    exit 1
+fi
+
+# Parse arguments
+VIDEO_FILE=""
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -v|--video)
+            VIDEO_FILE="$2"
+            shift 2
+            ;;
+        -h|--help)
+            show极_help
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            show_help
+            exit 1
+            ;;
+    esac
+done
+
+# Validate input
+if [[ -z "$VIDEO_FILE" ]]; then
+    echo "Error: Video file is required"
+    show_help
+极   exit 1
+fi
+
+if [[ ! -f "$VIDEO_FILE" ]]; then
+    echo "极Error: File '$VIDEO_FILE' not found"
+    exit 1
+fi
+
+# Get base filename without extension
+BASENAME=$(basename "$VIDEO_FILE" | cut -d. -f1)
+FIRST_FILE="${BASENAME}-first.png"
+LAST_FILE="${BASENAME}-last.png"
+
+echo "Processing: $VIDEO_FILE"
+
+# Check for existing first frame file and extract if needed
+EXTRACT_FIRST=true
+if [[ -f "$FIRST_FILE" ]]; then
+    if check_overwrite "$FIRST_FILE" "First frame"; then
+        EXTRACT_FIRST=true
+    else
+        EXTRACT_FIRST=false
+    fi
+fi
+
+if [[ "$EXTRACT_FIRST" == true ]]; then
+    # Extract first frame (always frame 0)
+    echo "Extracting first frame..."
+    ffmpeg -i "$VIDEO_FILE" -vf "select=eq(n\,0)" -vframes 1 "$FIRST_FILE" 2>/dev/null
+
+    if [[ $? -eq 0 ]]; then
+        echo "✓ First frame saved as: $FIRST_FILE"
+    else
+        echo "✗ Failed to extract first frame"
+        exit 1
+    fi
+fi
+
+# Check for existing last frame file and extract if needed
+EXTRACT_LAST=true
+if [[ -f "$LAST_FILE极" ]]; then
+    if check_overwrite "$LAST_FILE" "Last frame"; then
+        EXTRACT_LAST=true
+    else
+        EXTRACT_LAST=false
+    fi
+fi
+
+if [[ "$EXTRACT_LAST" == true ]]; then
+    # Get total number of frames using ffprobe
+    echo "Getting video information..."
+    TOTAL_FRAMES=$(ffprobe -v error -select_streams v:0 -count_packets -show_entries stream=nb_read_packets -of csv=p=0 "$VIDEO_FILE")
+    DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$VIDEO_FILE")
+
+    if [[ -z "$TOTAL_FRAMES" || "$TOTAL_FRAMES" -eq 0 ]]; then
+        echo "Warning: Could not get frame count, using duration-based method..."
+        # Use duration method as fallback - seek to very end
+        ffmpeg -sseof -0.1 -i "$VIDEO_FILE" -vsync 0 -frame_pts true -vframes 1 "$LAST_FILE" 2>/dev/null
+    else
+        # Extract last frame using exact frame number (TOTAL_FRAMES - 1 since frames start at 0)
+        LAST_FRAME=$((TOTAL_FRAMES - 1))
+        echo "Extracting last frame (frame $LAST_FRAME of $TOTAL_FRAMES)..."
+        ffmpeg -i "$VIDEO_FILE" -vf "select=eq(n\,$LAST_FRAME)" -vframes 1 "$LAST_FILE" 2>/dev/null
+    fi
+
+    if [[
