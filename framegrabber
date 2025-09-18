@@ -20,6 +20,8 @@ Usage:
 
 (framegrabber ${VERSION})
 
+Requires ffmpeg: https://ffmpeg.org/download.html
+
 Extracts frames from a video file.
 
 By default extracts only the FIRST and LAST frames.
@@ -52,6 +54,10 @@ Examples:
   framegrabber -v movie.mp4 --all --jpg --outdir ~/frames
   framegrabber --install
   framegrabber --uninstall
+  framegrabber -v movie.mp4 --wav
+  framegrabber -v movie.mp4 --copy-audio
+  framegrabber -v movie.mp4 --audio copy
+  framegrabber -v movie.mp4 --no-audio
 EOF
 }
 
