@@ -1,5 +1,7 @@
 # 🎬 framegrabber  
 
+![Demo of framegrabber in action](/assets/demo-framegrabber.gif)
+
 **framegrabber** is a lightweight, zero-dependency CLI tool for extracting frames from any video file with `ffmpeg`.  
 
 Built on top of `ffmpeg`, it’s designed for **film editors, VFX artists, creative coders, and generative AI workflows** where you need precise frame grabs without the overhead of a full NLE.  
