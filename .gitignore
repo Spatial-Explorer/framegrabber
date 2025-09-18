@@ -1,5 +1,7 @@
 #shell sript
 framegrabber.sh
+framegrabber-v8.sh
+.DS_Store
 
 # Logs
 logs

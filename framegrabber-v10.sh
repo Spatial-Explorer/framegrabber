@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# framegrabber-v10 
+# framegrabber-v10.sh
 # Extract first/last frames or all frames from a video.
 # Features: --outdir, --jpg/--png, --force, --quiet, sudo-fallback for outdir,
 #           --install / --uninstall (macOS-aware), --all for full extraction.
