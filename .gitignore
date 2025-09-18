@@ -2,7 +2,8 @@
 framegrabber.sh
 framegrabber-v8.sh
 .DS_Store
-
+redford.mp5
+/output/*
 # Logs
 logs
 *.log
