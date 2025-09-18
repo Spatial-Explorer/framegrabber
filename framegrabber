@@ -3,18 +3,22 @@
 # framegrabber-v1
 # Extract first/last frames or all frames from a video.
 # Features: --outdir, --jpg/--png, --force, --quiet, sudo-fallback for outdir,
-#           --install / --uninstall (macOS-aware), --all for full extraction.
+#           --install / --uninstall (macOS-aware), --all for full extraction,
+#           --wav and --no-audio for audio extraction options.
 #
 # Requires: ffmpeg
 
 set -euo pipefail
 
 APP_NAME="framegrabber"
+VERSION="v1"
 
 show_help() {
   cat <<'EOF'
 Usage:
   framegrabber -v <video-file> [options]
+
+(framegrabber ${VERSION})
 
 Extracts frames from a video file.
 
@@ -31,6 +35,10 @@ Options:
   -q, --quiet          Quiet mode: suppress prompts and non-essential output
                        (implies --force). If --outdir cannot be created,
                        falls back silently to ./output.
+      --wav            Extract audio as lossless WAV instead of MP3
+      --copy-audio     Extract audio without re-encoding (bitstream copy; auto-detects extension like .m4a/.mp3/.flac/.opus/.ogg/.ac3/.wav)
+      --audio FORMAT   Choose audio mode: mp3 (default) | wav | copy
+      --no-audio       Do not extract audio
   -h, --help           Show this help message
 
 Maintenance:
@@ -68,6 +76,22 @@ resolve_script_path() {
 
 script_dir="$(resolve_script_path)"
 script_src="$script_dir/$(basename "${BASH_SOURCE[0]}")"
+
+# Normalize arguments: replace Unicode dashes with ASCII '-' and split --key=value
+norm_args=()
+for arg in "$@"; do
+  # Use perl to handle Unicode dashes reliably across macOS/BSD
+  fixed="$(printf '%s' "$arg" | perl -CSDA -pe 's/[\x{2010}-\x{2015}\x{2212}\x{FE58}\x{FE63}\x{FF0D}]/-/g')"
+  # Split --key=value into two args
+  if [[ "$fixed" == --*=* ]]; then
+    k="${fixed%%=*}"
+    v="${fixed#*=}"
+    norm_args+=("$k" "$v")
+  else
+    norm_args+=("$fixed")
+  fi
+done
+set -- "${norm_args[@]}"
 
 # -------- Install / Uninstall --------
 detect_install_dir() {
@@ -134,10 +158,14 @@ do_uninstall() {
 case "${1:-}" in
   --install)   do_install; exit 0 ;;
   --uninstall) do_uninstall; exit 0 ;;
+  --version)   echo "${APP_NAME} ${VERSION}"; exit 0 ;;
+  --where)     echo "${script_src}"; exit 0 ;;
+
 esac
 
 # -------- Main functionality --------
 need ffmpeg
+need ffprobe
 
 VIDEO_FILE=""
 OUTDIR="./output"
@@ -145,6 +173,8 @@ EXT="png"
 FORCE=false
 QUIET=false
 ALL_FRAMES=false
+AUDIO_FORMAT="mp3"
+NO_AUDIO=false
 
 # Parse args
 while [[ $# -gt 0 ]]; do
@@ -156,6 +186,11 @@ while [[ $# -gt 0 ]]; do
     --all)      ALL_FRAMES=true; shift ;;
     --force)    FORCE=true; shift ;;
     -q|--quiet) QUIET=true; FORCE=true; shift ;;
+    --wav)      AUDIO_FORMAT="wav"; shift ;;
+    --copy-audio) AUDIO_FORMAT="copy"; shift ;;
+    --copyaudio|--copy_audio) AUDIO_FORMAT="copy"; shift ;;
+    --audio)    AUDIO_FORMAT="${2:-}"; shift 2 ;;
+    --no-audio) NO_AUDIO=true; shift ;;
     -h|--help)  show_help; exit 0 ;;
     *) echo "Unknown option: $1" >&2; show_help; exit 1 ;;
   esac
@@ -214,6 +249,28 @@ confirm_overwrite() {
   return 0
 }
 
+# --- Audio helpers ---
+detect_audio_codec() {
+  ffprobe -v error -select_streams a:0 -show_entries stream=codec_name \
+    -of default=noprint_wrappers=1:nokey=1 "$VIDEO_FILE" 2>/dev/null | head -n1
+}
+
+ext_for_copy_codec() {
+  local c="$1"
+  case "$c" in
+    aac|aac*)   echo "m4a" ;;
+    alac)       echo "m4a" ;;
+    mp3|mp2|mp1) echo "mp3" ;;
+    flac)       echo "flac" ;;
+    opus)       echo "opus" ;;
+    vorbis)     echo "ogg" ;;
+    ac3)        echo "ac3" ;;
+    eac3)       echo "eac3" ;;
+    pcm_*|pcm*) echo "wav" ;;
+    *)          echo "mka" ;;
+  esac
+}
+
 if $ALL_FRAMES; then
   out_pattern="${OUTDIR}/${name}-%06d.${EXT}"
   # If any matching files exist, confirm once (unless --force/--quiet)
@@ -246,6 +303,64 @@ else
     echo_info "Wrote $out_last"
   else
     echo_info "Skipped $out_last"
+  fi
+fi
+
+# Audio extraction
+if ! $NO_AUDIO; then
+  audio_codec="$(detect_audio_codec)"
+  if [[ -z "$audio_codec" ]]; then
+    echo_info "No audio stream detected; skipping audio extraction"
+  else
+    # Determine output path according to requested format
+    if [[ "$AUDIO_FORMAT" == "wav" ]]; then
+      out_audio="${OUTDIR}/${name}.wav"
+      if confirm_overwrite "$out_audio"; then
+        set +e
+        ffmpeg -hide_banner -loglevel error -y -i "$VIDEO_FILE" -vn -map 0:a:0 -c:a pcm_s16le "$out_audio"
+        status=$?
+        set -e
+        if [[ $status -eq 0 ]]; then
+          echo_info "Wrote audio to $out_audio"
+        else
+          echo_warn "Audio extraction (wav) failed."
+        fi
+      else
+        echo_info "Skipped audio extraction"
+      fi
+    elif [[ "$AUDIO_FORMAT" == "copy" || "$AUDIO_FORMAT" == "COPY" ]]; then
+      ext="$(ext_for_copy_codec "$audio_codec")"
+      out_audio="${OUTDIR}/${name}.${ext}"
+      if confirm_overwrite "$out_audio"; then
+        set +e
+        ffmpeg -hide_banner -loglevel error -y -i "$VIDEO_FILE" -vn -map 0:a:0 -c:a copy "$out_audio"
+        status=$?
+        set -e
+        if [[ $status -eq 0 ]]; then
+          echo_info "Wrote audio (copy, codec=$audio_codec) to $out_audio"
+        else
+          echo_warn "Bitstream copy failed; try without --copy-audio or use --wav/--mp3."
+        fi
+      else
+        echo_info "Skipped audio extraction"
+      fi
+    else
+      # default mp3
+      out_audio="${OUTDIR}/${name}.mp3"
+      if confirm_overwrite "$out_audio"; then
+        set +e
+        ffmpeg -hide_banner -loglevel error -y -i "$VIDEO_FILE" -vn -map 0:a:0 -c:a libmp3lame -q:a 2 "$out_audio"
+        status=$?
+        set -e
+        if [[ $status -eq 0 ]]; then
+          echo_info "Wrote audio to $out_audio"
+        else
+          echo_warn "Audio extraction (mp3) failed."
+        fi
+      else
+        echo_info "Skipped audio extraction"
+      fi
+    fi
   fi
 fi
 

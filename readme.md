@@ -2,7 +2,7 @@
 
 ![Demo of framegrabber in action](/assets/demo-framegrabber.gif)
 
-**framegrabber** is a lightweight, zero-dependency CLI tool for extracting frames from any video file with `ffmpeg`.  
+**framegrabber** is a lightweight, zero-dependency CLI tool for extracting frames **and audio** from any video file with `ffmpeg`.  
 
 Built on top of `ffmpeg`, it’s designed for **film editors, VFX artists, creative coders, and generative AI workflows** where you need precise frame grabs without the overhead of a full NLE.  
 
@@ -61,6 +61,10 @@ Use `--all` to extract **EVERY frame** as sequentially numbered files.
                        (implies --force). If --outdir cannot be created,
                        falls back silently to ./output.
   -h, --help           Show this help message
+      --wav            Extract audio as lossless WAV instead of MP3
+      --copy-audio     Extract audio without re-encoding (auto-detect codec/extension)
+      --audio FORMAT   Choose audio mode: mp3 (default) | wav | copy
+      --no-audio       Disable audio extraction
 
 Maintenance:
       --install        Install this script globally (macOS/Linux)
@@ -80,6 +84,18 @@ framegrabber -v clip.mp4 --all --jpg --outdir ~/frames
 # Extract quietly (no prompts, force overwrite)
 framegrabber -v demo.mp4 --quiet
 
+# Extract audio as WAV
+framegrabber -v movie.mp4 --wav
+
+# Extract audio without re-encoding (auto codec, e.g. m4a)
+framegrabber -v movie.mp4 --copy-audio
+
+# Use the generic audio flag
+framegrabber -v movie.mp4 --audio copy
+
+# Disable audio extraction
+framegrabber -v movie.mp4 --no-audio
+
 # Install globally (copies script into /usr/local/bin)
 framegrabber --install
 
@@ -98,7 +114,7 @@ framegrabber --uninstall
 
 ---
 ## * What's Next
-- Updated installers for adding FFMPEG if you don't have it on your system.
+- Updated installers and documentation for adding FFMPEG (https://ffmpeg.org/download.html) if you don't have it on your system.
 - Update Brew Installer
 - MCP server for direct GenAI interactions 
 
